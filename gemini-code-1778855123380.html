@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Fact-Checker School Mobile Edition + BGM</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;600;800&display=swap');
+        
+        * { box-sizing: border-box; font-family: 'Prompt', sans-serif; user-select: none; -webkit-user-select: none; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0f172a; touch-action: none; }
+        
+        #game-container { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: radial-gradient(circle, #1e1b4b 0%, #0f172a 100%); }
+        canvas { background: #1e293b; max-width: 100%; max-height: 100%; object-fit: contain; }
+
+        /* แผงแสดงสถานะห้อง */
+        #room-indicator {
+            position: absolute; top: 15px; left: 15px; right: 15px;
+            background: rgba(15, 23, 42, 0.85); color: #fff; padding: 12px 20px; border-radius: 16px;
+            font-size: 12px; border: 2px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); pointer-events: none; z-index: 10;
+        }
+        .room-title { color: #38bdf8; font-weight: 800; font-size: 16px; display: block; margin-bottom: 2px; }
+
+        /* หน้าจอ Welcome */
+        #welcome-screen {
+            position: absolute; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.95);
+            display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 200; padding: 20px;
+        }
+        .welcome-box {
+            background: linear-gradient(135deg, #ff007f, #7000ff); padding: 30px 20px; border-radius: 24px;
+            text-align: center; color: white; width: 100%; max-width: 400px; box-shadow: 0 20px 50px rgba(112, 0, 255, 0.4);
+            border: 4px solid #fff; animation: pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .welcome-box h1 { margin: 0 0 10px 0; font-size: 24px; font-weight: 800; text-shadow: 0 2px 0 #000; line-height: 1.3; }
+        .welcome-box p { font-size: 14px; margin-bottom: 25px; opacity: 0.9; line-height: 1.5; }
+        .start-btn {
+            background: #00ffcc; color: #0f172a; border: none; padding: 12px 35px; font-size: 16px;
+            font-weight: 800; border-radius: 50px; cursor: pointer; box-shadow: 0 6px 0 #00b38f; transition: all 0.1s;
+        }
+        .start-btn:active { transform: translateY(3px); box-shadow: 0 3px 0 #00b38f; }
+
+        /* หน้าต่างป๊อปอัปคำถาม */
+        #quiz-box {
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 90%; max-width: 450px; background: #ffffff; padding: 25px; border-radius: 24px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.6); border: 4px solid #7000ff; text-align: center; z-index: 100;
+        }
+        #quiz-progress { font-size: 13px; color: #7000ff; font-weight: 800; margin-bottom: 8px; }
+        #quiz-question { margin: 10px 0 20px 0; color: #1e293b; font-size: 15px; font-weight: 600; line-height: 1.5; text-align: left; background: #f8fafc; padding: 12px; border-radius: 12px; border-left: 5px solid #7000ff; }
+        
+        #timer-bar-container { width: 100%; height: 10px; background: #e2e8f0; border-radius: 10px; margin-bottom: 20px; overflow: hidden; }
+        #timer-bar { width: 100%; height: 100%; background: linear-gradient(90deg, #00ffcc, #ff007f); transition: width 0.1s linear; }
+
+        .quiz-options-grid { display: flex; flex-direction: column; gap: 12px; }
+        .choice-btn { padding: 15px; border-radius: 16px; font-size: 18px; font-weight: 800; cursor: pointer; border: none; transition: all 0.1s; width: 100%; }
+        .btn-real { background: #22c55e; color: white; box-shadow: 0 5px 0 #15803d; }
+        .btn-fake { background: #ef4444; color: white; box-shadow: 0 5px 0 #b91c1c; }
+        .choice-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 currentColor; }
+
+        /* กล่องเฉลย */
+        #explanation-box {
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 90%; max-width: 440px; background: #1e293b; padding: 25px; border-radius: 24px; color: white;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.8); border: 4px solid #ff007f; text-align: center; z-index: 110;
+        }
+        #explanation-box h4 { color: #ff007f; font-size: 20px; margin: 0 0 10px 0; font-weight: 800; }
+        #explanation-text { font-size: 14px; line-height: 1.5; color: #cbd5e1; margin-bottom: 20px; text-align: left; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 12px; }
+
+        /* แผงควบคุมจอยสติ๊กสำหรับมือถือ */
+        #mobile-controls {
+            position: absolute; bottom: 30px; left: 0; width: 100%; padding: 0 30px;
+            display: flex; justify-content: space-between; align-items: center; pointer-events: none; z-index: 50;
+        }
+        #joystick-boundary {
+            pointer-events: auto; width: 120px; height: 120px; background: rgba(255,255,255,0.12);
+            border: 3px solid rgba(255,255,255,0.25); border-radius: 50%; display: flex; justify-content: center; align-items: center; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+        }
+        #joystick-stick { width: 50px; height: 50px; background: #ffffff; border-radius: 50%; box-shadow: 0 6px 15px rgba(0,0,0,0.4); transition: transform 0.05s ease; }
+        #sprint-button {
+            pointer-events: auto; width: 80px; height: 80px; background: rgba(255, 0, 127, 0.35);
+            border: 3px solid #ff007f; color: white; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: 800; font-size: 16px; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        #sprint-button:active { background: rgba(255, 0, 127, 0.7); }
+        
+        @keyframes pop { 0% { transform: scale(0.7); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <!-- หน้าจอเริ่มเกม -->
+        <div id="welcome-screen">
+            <div class="welcome-box">
+                <h1>🕵️‍♂️ โรงเรียนนักสืบ<br>จับผิดข่าวปลอม!</h1>
+                <p>เดินสำรวจห้องเรียนเพื่อค้นหา "โต๊ะคุณครู" แล้วมาร่วมมือกันทำภารกิจจับผิดข่าวลวงและข้อความแชร์ลูกโซ่ให้ครบ 15 ข้อกันเถอะ!</p>
+                <button class="start-btn" onclick="startGame()">เริ่มเล่นเกม 🚀</button>
+            </div>
+        </div>
+
+        <!-- แจ้งชื่อห้อง -->
+        <div id="room-indicator">
+            <span id="room-name" class="room-title">🏫 โถงทางเดินหลัก</span>
+            <span style="color: #94a3b8;">🎯 ภารกิจ: เดินไปสัมผัสที่ <b style="color:#00ffcc">โต๊ะคุณครู</b> เพื่อเริ่มตอบคำถาม</span>
+        </div>
+
+        <!-- หน้าต่างคำถาม -->
+        <div id="quiz-box">
+            <div id="quiz-progress">ข้อความที่ 1/15</div>
+            <div id="timer-bar-container"><div id="timer-bar"></div></div>
+            <h3 id="quiz-question">กำลังโหลดโจทย์...</h3>
+            <div class="quiz-options-grid">
+                <button class="choice-btn btn-real" onclick="submitAnswer(true)">📰 ข่าวจริง (น่าเชื่อถือ)</button>
+                <button class="choice-btn btn-fake" onclick="submitAnswer(false)">❌ ข่าวปลอม (หลอกลวง)</button>
+            </div>
+        </div>
+
+        <!-- หน้าต่างเฉลย -->
+        <div id="explanation-box">
+            <h4 id="explanation-title">คุณตอบไม่ถูกต้อง! ❌</h4>
+            <div id="explanation-text">คำอธิบายกลลวง...</div>
+            <button class="start-btn" style="padding: 10px 30px; font-size: 15px;" onclick="nextQuestion()">เข้าใจแล้ว เดินหน้าต่อ ➡️</button>
+        </div>
+
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- ระบบปุ่มควบคุมสัมผัสสำหรับมือถือ -->
+        <div id="mobile-controls">
+            <div id="joystick-boundary"><div id="joystick-stick"></div></div>
+            <div id="sprint-button">วิ่ง 🏃‍♂️</div>
+        </div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const mapW = 1000, mapH = 700;
+    canvas.width = mapW; canvas.height = mapH;
+
+    // --- ระบบสังเคราะห์เสียง Web Audio API (SFX + BGM) ---
+    let audioCtx = null;
+    let bgmInterval = null;
+    let musicTempo = 150; // ความเร็วของตัวโน้ตเพลงดนตรี
+
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    // ฟังก์ชันเล่นเสียงเอฟเฟกต์ (SFX)
+    function playSound(type) {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        if (type === 'click') {
+            osc.type = 'sine'; osc.frequency.setValueAtTime(420, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.08);
+        } 
+        else if (type === 'step') {
+            osc.type = 'triangle'; osc.frequency.setValueAtTime(110, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.06);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.06);
+        } 
+        else if (type === 'correct') {
+            osc.type = 'sine'; osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
+            osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.08);
+            gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.35);
+        } 
+        else if (type === 'wrong') {
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(170, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(90, audioCtx.currentTime + 0.25);
+            gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.25);
+        }
+    }
+
+    // 🎵 ระบบเล่นดนตรีประกอบพื้นหลังสไตล์ Retro 8-Bit (BGM)
+    function startBackgroundMusic() {
+        if (bgmInterval) return; // ถ้าเล่นอยู่แล้ว ไม่สร้างซ้อน
+
+        // ตัวโน้ตทำนองสไตล์นักสืบ (ความถี่ตัวโน้ตดนตรี)
+        const notes = [
+            146.83, 0, 164.81, 174.61, 0, 174.61, 164.81, 146.83,
+            220.00, 0, 196.00, 0, 174.61, 164.81, 146.83, 0,
+            130.81, 0, 146.83, 155.56, 0, 155.56, 146.83, 130.81,
+            196.00, 0, 174.61, 0, 155.56, 146.83, 130.81, 0
+        ];
+        let currentBeat = 0;
+
+        bgmInterval = setInterval(() => {
+            if (!audioCtx || quizActive) return; // หยุดเล่นเพลงชั่วคราวเวลาใช้สมองตอบควิซเพื่อไม่ให้รบกวนสมาธิ
+
+            let freq = notes[currentBeat];
+            if (freq > 0) {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                
+                osc.type = 'triangle'; // เสียงสไตล์ 8-bit แบบนุ่มนวลไม่หนวกหู
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                
+                // ดนตรีคลอเบาๆ (Volume 0.03 เพื่อไม่ให้กลบเสียงเดิน)
+                gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.2);
+            }
+            
+            currentBeat = (currentBeat + 1) % notes.length;
+        }, musicTempo);
+    }
+
+    // --- คลังคำถาม 15 ข้อ ---
+    const quizData = {
+        roomA: [
+            { q: "📌 ข่าวแชร์ว่อน: 'ด่วน! รัฐบาลประกาศแจกเงินดิจิทัลรอบใหม่เพิ่มคนละ 50,000 บาท สิทธิ์มีจำนวนจำกัด คลิกรับที่ลิงก์ด้านล่างด่วนก่อนเต็ม'", isReal: false, exp: "⚠️ จุดจับผิดข่าวปลอม: มีการใช้คำเร่งเร้าอารมณ์ เช่น 'ด่วนที่สุด', 'จำนวนจำกัด' เพื่อให้หลงกลกดลิงก์แปลกปลอมเพื่อขโมยข้อมูลดูดเงินบัญชี" },
+            { q: "📌 ข่าวสาร: 'กระทรวงสาธารณสุขเตือนระวังโรคระบาดในฤดูฝน แนะให้ประชาชนล้างมือบ่อยๆ และสวมหน้ากากในที่แออัด'", isReal: true, exp: "" },
+            { q: "📌 ข่าวแชร์ว่อน: 'ห้ามกินปลาเส้นทอดเด็ดขาด! นักวิจัยพบสารเคมีพลาสติกปนเปื้อนในเนื้อปลา ขยำแล้วยืดหยุ่นเหมือนยางลบ'", isReal: false, exp: "⚠️ จุดจับผิดข่าวปลอม: ข้อมูลขาดการอ้างอิงแหล่งวิจัยที่น่าเชื่อถือ เป็นข่าวลวงเก่าที่นำมาวนแชร์ซ้ำเพื่อปั่นยอดไลก์" },
+            { q: "📌 ข่าวสาร: 'กรมอุตุนิยมวิทยาประกาศเตือนภัยพายุฤดูร้อนบริเวณประเทศไทยตอนบน ฉบับที่ 3 มีผลกระทบตั้งแต่วันนี้'", isReal: true, exp: "" },
+            { q: "📌 ข่าวแชร์ว่อน: 'กินน้ำมะนาวผสมโซดาร้อนๆ ทุกเช้า สามารถฆ่าเซลล์มะเร็งให้หายขาดได้ 100% ไม่ต้องพึ่งเคมีบำบัดอีกต่อไป'", isReal: false, exp: "⚠️ จุดจับผิดข่าวปลอม: ใช้คำโฆษณาเกินจริง 'หายขาด 100%' ทางการแพทย์ยืนยันแล้วว่ามะนาวโซดาไม่มีฤทธิ์รักษาโรคมะเร็งได้" }
+        ],
+        roomB: [
+            { q: "📌 ข่าวแชร์ว่อน: 'ภาพหลุดทางช้างเผือกเหนือกรุงเทพฯ ท้องฟ้าเปิดจนเห็นกลุ่มดาวสว่างชัดเจนสีรุ้งเรืองแสงระยิบระยับ'", isReal: false, exp: "⚠️ จุดจับผิดข่าวปลอม: มีการปรับแต่งความอิ่มตัวสีเกินจริง กรุงเทพฯ มีมลภาวะทางแสงสูงเกินกว่าจะมองเห็นดาวชัดขนาดนั้นด้วยตาเปล่า" },
+            { q: "📌 ข่าวสาร: 'สถาบันดาราศาสตร์เผยภาพถ่ายดาวอังคารเข้าใกล้โลกที่สุดในรอบปี จากกล้องโทรทรรศน์แห่งชาติ'", isReal: true, exp: "" },
+            { q: "📌 ข่าวแชร์ว่อน: 'สัญญาณเตือนภัยพิบัติคลื่นยักษ์สึนามิกำลังจะถล่มอ่าวไทยในอีก 2 ชั่วโมงข้างหน้า ขอให้ทุกคนหนีขึ้นที่สูงทันที'", isReal: false, exp: "⚠️ จุดจับผิดข่าวปลอม: ข้อมูลสร้างความตื่นตระหนกขวัญเสีย (Panic) โดยไม่มีการลงนามประกาศอย่างเป็นทางการจากศูนย์เตือนภัยพิบัติแห่งชาติ" },
+            { q: "📌 ข่าวสาร: 'การไฟฟ้านครหลวงแจ้งกำหนดการปิดปรับปรุงระบบจ่ายกระแสไฟฟ้าชั่วคราวบางพื้นที่ เพื่อความปลอดภัยของผู้ปฏิบัติงาน'", isReal: true, exp: "" },
+            { q: "📌 ข่าวแชร์ว่อน: 'พืชชนิดใหม่ค้นพบในป่าลึก ออกผลลัพธ์มามีรูปร่างหน้าตาเหมือนมนุษย์เป๊ะๆ สรรพคุณกินแล้วอายุยืนหมื่นปี'", isReal: false, exp: "⚠️ จุดจับผิดข่าวปลอม: ใช้ภาพตัดต่อ AI และสร้างเรื่องเหนือธรรมชาติชวนเชื่อ เพื่อหลอกให้แชร์ต่อในกลุ่มไลน์" }
+        ],
+        roomC: [
+            { q: "📌 ข่าวแชร์ว่อน: 'ดาราดังระดับโลกประกาศบริจาคทรัพย์สินทั้งหมดให้โรงพยาบาลในไทย หลังจากซาบซึ้งใจในทริปท่องเที่ยวที่ผ่านมา'", isReal: false, exp: "⚠️ จุดจับผิดข่าวปลอม: ข่าว Clickbait ปั่นกระแส เป็นการพาดหัวข่าวเพื่อดึงคนเข้าเว็บไซต์โฆษณา ไม่มีความจริงอ้างอิงจากสำนักข่าวหลัก" },
+            { q: "📌 ข่าวสาร: 'พิพิธภัณฑ์ศิลปะแห่งชาติจัดนิทรรศการแสดงภาพเขียนประวัติศาสตร์ เปิดให้เยาวชนเข้าชมฟรีตลอดเดือนนี้'", isReal: true, exp: "" },
+            { q: "📌 ข่าวแชร์ว่อน: 'คลิปเสียงลับหลุด! ผู้นำประเทศสารภาพกลางห้องประชุมว่าวางแผนล็อกดาวน์เมืองเพื่อกลั่นแกล้งประชาชน'", isReal: false, exp: "⚠️ จุดจับผิดข่าวปลอม: คลิปเสียงถูกสร้างขึ้นด้วยเทคโนโลยี Deepfake AI สังเกตได้จากจังหวะการหายใจและโทนเสียงที่แข็งทื่อราบเรียบผิดปกติ" },
+            { q: "📌 ข่าวสาร: 'ธนาคารแห่งประเทศไทยเตือนภัยแก๊งคอลเซ็นเตอร์อ้างเป็นเจ้าหน้าที่ศาล หลอกให้โอนเงินตรวจสอบ'", isReal: true, exp: "" },
+            { q: "📌 ข่าวแชร์ว่อน: 'ตื่นตาตื่นใจ! พบรอยพระพุทธบาทโผล่กลางห้างสรรพสินค้าเปิดใหม่ใจกลางเมือง คนแห่กราบไหว้ขอหวยถูกกันถ้วนหน้า'", isReal: false, exp: "⚠️ จุดจับผิดข่าวปลอม: ข้อมูลลวงเน้นพุ่งเป้าไปที่ความเชื่อส่วนบุคคลและโชคลาภ เพื่อสร้างกระแสไวรัลเรียกร้องความสนใจ" }
+        ]
+    };
+
+    // --- GAME STATES ---
+    let currentRoom = 'hallway';
+    let score = 0;
+    let totalQuestionsAnswered = 0;
+    let currentQuestionIndex = 0;
+    let quizActive = false;
+    let welcomeActive = true;
+    
+    let timeLeft = 15;
+    let timerInterval = null;
+    let stepSoundDelay = 0;
+
+    const player = {
+        x: 500, y: 550, radius: 16, speed: 4, sprintSpeed: 6.5,
+        color: '#ff007f', hairColor: '#00ffcc', angle: 0, isMoving: false, animFrame: 0
+    };
+
+    let keys = {};
+    let isSprinting = false;
+    let obstacles = [];
+    let roomTriggers = [];
+    let teacherDesk = null;
+    let decorations = [];
+
+    function startGame() {
+        initAudio();
+        playSound('click');
+        startBackgroundMusic(); // สตาร์ทดนตรีประกอบฉากพื้นหลังทันทีที่กดเข้าเกม
+        welcomeActive = false;
+        document.getElementById('welcome-screen').style.display = 'none';
+        loadRoom('hallway');
+    }
+
+    function loadRoom(roomName) {
+        currentRoom = roomName;
+        obstacles = []; roomTriggers = []; teacherDesk = null; decorations = [];
+        const nameDisplay = document.getElementById('room-name');
+
+        if (roomName === 'hallway') {
+            nameDisplay.innerText = "🏫 โถงทางเดินหลัก (จุดเริ่มต้น)";
+            nameDisplay.style.color = "#a855f7";
+            
+            // ขอบกำแพง
+            obstacles.push({ x: 0, y: 0, w: mapW, h: 40, color: '#1e1b4b' });
+            obstacles.push({ x: 0, y: mapH - 40, w: mapW, h: 40, color: '#1e1b4b' });
+            obstacles.push({ x: 0, y: 0, w: 40, h: mapH, color: '#1e1b4b' });
+            obstacles.push({ x: mapW - 40, y: 0, w: 40, h: mapH, color: '#1e1b4b' });
+
+            // ประตูห้องเรียน
+            obstacles.push({ x: 40, y: 0, w: 110, h: 180, color: '#334155' });
+            obstacles.push({ x: 230, y: 0, w: 120, h: 180, color: '#334155' });
+            roomTriggers.push({ x: 150, y: 40, w: 80, h: 20, targetRoom: 'roomA', spawnX: 500, spawnY: 600 });
+
+            obstacles.push({ x: 350, y: 0, w: 100, h: 180, color: '#334155' });
+            obstacles.push({ x: 530, y: 0, w: 120, h: 180, color: '#334155' });
+            roomTriggers.push({ x: 450, y: 40, w: 80, h: 20, targetRoom: 'roomB', spawnX: 500, spawnY: 600 });
+
+            obstacles.push({ x: 650, y: 0, w: 100, h: 180, color: '#334155' });
+            obstacles.push({ x: 830, y: 0, w: 130, h: 180, color: '#334155' });
+            roomTriggers.push({ x: 750, y: 40, w: 80, h: 20, targetRoom: 'roomC', spawnX: 500, spawnY: 600 });
+
+            // พร็อพตกแต่งจุดเกิดโถงทางเดิน
+            obstacles.push({ x: 40, y: mapH-85, w: 160, h: 45, color: '#6366f1', label: 'LOCKERS' });
+            obstacles.push({ x: mapW-200, y: mapH-85, w: 160, h: 45, color: '#6366f1', label: 'LOCKERS' });
+
+            decorations.push({ type: 'plant', x: 380, y: mapH-65, radius: 14 });
+            decorations.push({ type: 'plant', x: 620, y: mapH-65, radius: 14 });
+            decorations.push({ type: 'light', x: 290, y: 300, radius: 40 });
+            decorations.push({ type: 'light', x: 700, y: 300, radius: 40 });
+
+        } else {
+            let roomColor = "#3b82f6";
+            if(roomName === 'roomA') { nameDisplay.innerText = "📐 ห้องเรียน A (ข่าวสังคมการเมือง)"; roomColor = "#3b82f6"; }
+            if(roomName === 'roomB') { nameDisplay.innerText = "🧪 ห้องเรียน B (ข่าววิทย์และสิ่งแวดล้อม)"; roomColor = "#22c55e"; }
+            if(roomName === 'roomC') { nameDisplay.innerText = "🎨 ห้องเรียน C (ข่าวไอทีและบันเทิง)"; roomColor = "#ec4899"; }
+            nameDisplay.style.color = roomColor;
+
+            obstacles.push({ x: 0, y: 0, w: mapW, h: 40, color: '#475569' });
+            obstacles.push({ x: 0, y: 0, w: 40, h: mapH, color: '#475569' });
+            obstacles.push({ x: mapW - 40, y: 0, w: 40, h: mapH, color: '#475569' });
+            obstacles.push({ x: 0, y: mapH - 40, w: 450, h: 40, color: '#475569' });
+            obstacles.push({ x: 550, y: mapH - 40, w: 450, h: 40, color: '#475569' });
+            
+            let exitX = (roomName === 'roomA') ? 190 : (roomName === 'roomB' ? 490 : 790);
+            roomTriggers.push({ x: 450, y: mapH - 50, w: 100, h: 30, targetRoom: 'wayback', targetRoomActual: 'hallway', spawnX: exitX, spawnY: 120 });
+
+            teacherDesk = { x: 450, y: 100, w: 100, h: 50, color: roomColor };
+            obstacles.push(teacherDesk);
+
+            for (let r = 0; r < 3; r++) {
+                for (let c = 0; c < 5; c++) {
+                    obstacles.push({ x: 140 + c * 155, y: 240 + r * 110, w: 75, h: 45, color: '#f59e0b' });
+                }
+            }
+        }
+    }
+
+    // --- CONTROLS LISTENERS ---
+    window.addEventListener('keydown', e => { initAudio(); keys[e.code] = true; if(e.code.includes('Shift')) isSprinting = true; });
+    window.addEventListener('keyup', e => { keys[e.code] = false; if(e.code.includes('Shift')) isSprinting = false; });
+
+    const jBoundary = document.getElementById('joystick-boundary');
+    const jStick = document.getElementById('joystick-stick');
+    let jActive = false, jVector = { x: 0, y: 0 };
+    
+    jBoundary.addEventListener('touchstart', (e) => { initAudio(); jActive = true; handleJoystick(e); }, {passive: false});
+    jBoundary.addEventListener('touchmove', (e) => { if (!jActive) return; handleJoystick(e); e.preventDefault(); }, {passive: false});
+    jBoundary.addEventListener('touchend', () => { jActive = false; jStick.style.transform = 'translate(0px,0px)'; jVector = { x:0, y:0 }; });
+    
+    function handleJoystick(e) {
+        const t = e.touches[0]; const r = jBoundary.getBoundingClientRect();
+        let dx = t.clientX - (r.left + r.width/2), dy = t.clientY - (r.top + r.height/2);
+        const d = Math.sqrt(dx*dx + dy*dy);
+        if (d > 35) { dx *= 35/d; dy *= 35/d; }
+        jStick.style.transform = `translate(${dx}px, ${dy}px)`;
+        jVector = { x: dx/35, y: dy/35 };
+    }
+
+    const sBtn = document.getElementById('sprint-button');
+    sBtn.addEventListener('touchstart', (e) => { initAudio(); isSprinting = true; e.preventDefault(); });
+    sBtn.addEventListener('touchend', () => isSprinting = false);
+
+    // --- COLLISION PHYSICS ---
+    function checkCollision(nx, ny) {
+        if (nx - player.radius < 0 || nx + player.radius > mapW || ny - player.radius < 0 || ny + player.radius > mapH) return true;
+        for (let obs of obstacles) {
+            let cx = Math.max(obs.x, Math.min(nx, obs.x + obs.w));
+            let cy = Math.max(obs.y, Math.min(ny, obs.y + obs.h));
+            if (((nx - cx)*(nx - cx) + (ny - cy)*(ny - cy)) < (player.radius * player.radius)) return true;
+        }
+        if (teacherDesk && !quizActive && currentQuestionIndex < 5) {
+            let cx = Math.max(teacherDesk.x - 25, Math.min(nx, teacherDesk.x + teacherDesk.w + 25));
+            let cy = Math.max(teacherDesk.y - 25, Math.min(ny, teacherDesk.y + teacherDesk.h + 25));
+            if (((nx - cx)*(nx - cx) + (ny - cy)*(ny - cy)) < (player.radius * player.radius + 50)) {
+                openQuiz();
+            }
+        }
+        return false;
+    }
+
+    // --- QUIZ LOGIC ---
+    function openQuiz() {
+        quizActive = true;
+        document.getElementById('quiz-box').style.display = 'block';
+        showQuestion();
+    }
+
+    function showQuestion() {
+        const questionPool = quizData[currentRoom];
+        if (currentQuestionIndex >= 5 || !questionPool) {
+            document.getElementById('quiz-progress').innerText = "🎉 ห้องเรียนนี้เสร็จสิ้นแล้ว!";
+            document.getElementById('quiz-question').innerText = "คุณเคลียร์ข่าวปลอมในห้องนี้หมดแล้ว เดินออกจากประตูเพื่อไปห้องอื่นต่อได้เลย!";
+            document.getElementById('quiz-box').querySelector('.quiz-options-grid').style.display = 'none';
+            setTimeout(() => {
+                quizActive = false;
+                document.getElementById('quiz-box').style.display = 'none';
+                document.getElementById('quiz-box').querySelector('.quiz-options-grid').style.display = 'flex';
+                player.y += 50;
+            }, 2500);
+            return;
+        }
+
+        const data = questionPool[currentQuestionIndex];
+        document.getElementById('quiz-progress').innerText = `คำถามรวมข้อที่ ${totalQuestionsAnswered + 1} / 15`;
+        document.getElementById('quiz-question').innerText = data.q;
+
+        timeLeft = 15;
+        document.getElementById('timer-bar').style.width = '100%';
+        clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            timeLeft -= 0.1;
+            document.getElementById('timer-bar').style.width = `${(timeLeft / 15) * 100}%`;
+            if (timeLeft <= 0) { clearInterval(timerInterval); handleTimeout(); }
+        }, 100);
+    }
+
+    function submitAnswer(userChoice) {
+        clearInterval(timerInterval);
+        const data = quizData[currentRoom][currentQuestionIndex];
+        if (userChoice === data.isReal) {
+            playSound('correct');
+            score++; totalQuestionsAnswered++; currentQuestionIndex++;
+            alert("ถูกต้องยอดเยี่ยม! 🌟 ข้อมูลนี้เช็กแล้วชัวร์");
+            showQuestion();
+        } else {
+            playSound('wrong');
+            showExplanation("คุณตอบไม่ถูกต้อง! ❌", data.exp);
+        }
+    }
+
+    function handleTimeout() {
+        playSound('wrong');
+        const data = quizData[currentRoom][currentQuestionIndex];
+        showExplanation("⏳ หมดเวลาเกินกำหนด!", data.exp || "⚠️ กรุณาพิจารณาแหล่งที่มาให้ถี่ถ้วนก่อนหลงเชื่อ");
+    }
+
+    function showExplanation(title, reason) {
+        document.getElementById('quiz-box').style.display = 'none';
+        document.getElementById('explanation-box').style.display = 'block';
+        document.getElementById('explanation-title').innerText = title;
+        document.getElementById('explanation-text').innerText = reason || "✅ ข่าวนี้เป็นข้อมูลจริงที่ได้รับการยืนยันแล้ว";
+    }
+
+    function nextQuestion() {
+        playSound('click');
+        document.getElementById('explanation-box').style.display = 'none';
+        document.getElementById('quiz-box').style.display = 'block';
+        totalQuestionsAnswered++; currentQuestionIndex++;
+        if (totalQuestionsAnswered >= 15) { showFinalResult(); } else { showQuestion(); }
+    }
+
+    function showFinalResult() {
+        document.getElementById('quiz-progress').innerText = "🏁 จบการภารกิจ!";
+        document.getElementById('quiz-question').innerHTML = `🤖 โรงเรียนปลอดภัยแล้ว!<br>คุณทำคะแนนได้ <b style="color:#7000ff; font-size:22px;">${score} / 15</b> คะแนน!`;
+        document.getElementById('quiz-box').querySelector('.quiz-options-grid').innerHTML = `<button class="choice-btn btn-real" onclick="location.reload()">🔄 เล่นใหม่อีกครั้ง</button>`;
+    }
+
+    // --- GAME LOOP ---
+    function update() {
+        if (quizActive || welcomeActive || document.getElementById('explanation-box').style.display === 'block') return;
+
+        let dx = 0, dy = 0;
+        if (keys['KeyW'] || keys['ArrowUp']) dy = -1;
+        if (keys['KeyS'] || keys['ArrowDown']) dy = 1;
+        if (keys['KeyA'] || keys['ArrowLeft']) dx = -1;
+        if (keys['KeyD'] || keys['ArrowRight']) dx = 1;
+        if (jActive) { dx = jVector.x; dy = jVector.y; }
+
+        player.isMoving = (dx !== 0 || dy !== 0);
+
+        if (player.isMoving) {
+            player.angle = Math.atan2(dy, dx);
+            let speed = isSprinting ? player.sprintSpeed : player.speed;
+            
+            if (!checkCollision(player.x + dx * speed, player.y)) player.x += dx * speed;
+            if (!checkCollision(player.x, player.y + dy * speed)) player.y += dy * speed;
+            
+            player.animFrame += isSprinting ? 0.35 : 0.18;
+
+            stepSoundDelay--;
+            if (stepSoundDelay <= 0) {
+                playSound('step');
+                stepSoundDelay = isSprinting ? 12 : 20;
+            }
+
+            for (let gate of roomTriggers) {
+                if (player.x > gate.x && player.x < gate.x + gate.w && player.y > gate.y && player.y < gate.y + gate.h) {
+                    playSound('click');
+                    player.x = gate.spawnX; player.y = gate.spawnY;
+                    currentQuestionIndex = 0;
+                    loadRoom(gate.targetRoomActual || gate.targetRoom);
+                    break;
+                }
+            }
+        }
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, mapW, mapH);
+
+        if (currentRoom === 'hallway') {
+            ctx.fillStyle = '#1e1b4b'; ctx.fillRect(0, 0, mapW, mapH);
+            ctx.fillStyle = '#2e2a72';
+            for(let x=40; x<mapW-40; x+=80) ctx.fillRect(x, 180, 40, mapH-220);
+        } else {
+            ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, 0, mapW, mapH);
+            ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1;
+            for(let x=40; x<mapW-40; x+=60) { ctx.beginPath(); ctx.moveTo(x,40); ctx.lineTo(x,mapH-40); ctx.stroke(); }
+        }
+
+        if (currentRoom === 'hallway') {
+            decorations.forEach(dec => {
+                if(dec.type === 'light') {
+                    let gradient = ctx.createRadialGradient(dec.x, dec.y, 5, dec.x, dec.y, dec.radius * 2);
+                    gradient.addColorStop(0, 'rgba(245, 158, 11, 0.18)');
+                    gradient.addColorStop(1, 'rgba(245, 158, 11, 0)');
+                    ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(dec.x, dec.y, dec.radius * 2, 0, Math.PI*2); ctx.fill();
+                }
+                if(dec.type === 'plant') {
+                    ctx.fillStyle = '#78350f'; ctx.fillRect(dec.x-8, dec.y, 16, 12);
+                    ctx.fillStyle = '#22c55e'; ctx.beginPath(); ctx.arc(dec.x, dec.y-4, dec.radius, 0, Math.PI*2); ctx.fill();
+                }
+            });
+        }
+
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.25)'; ctx.shadowBlur = 10; ctx.shadowOffsetX = 4; ctx.shadowOffsetY = 5;
+        obstacles.forEach(obs => {
+            ctx.fillStyle = obs.color || '#475569';
+            ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+            if(obs.label === 'LOCKERS') {
+                ctx.strokeStyle = '#a5b4fc'; ctx.lineWidth = 1;
+                for(let lx = obs.x+10; lx < obs.x+obs.w; lx+=20) ctx.strokeRect(lx, obs.y+5, 10, obs.h-10);
+            }
+        });
+        ctx.shadowColor = 'transparent';
+
+        if (currentRoom === 'hallway') {
+            ctx.fillStyle = '#00ffcc'; ctx.font = 'bold 15px Prompt';
+            ctx.fillText("🚪 ห้อง A: สังคม", 140, 140);
+            ctx.fillText("🚪 ห้อง B: วิทยาศาสตร์", 435, 140);
+            ctx.fillText("🚪 ห้อง C: บันเทิง/ไอที", 735, 140);
+        } else {
+            ctx.fillStyle = '#0f172a'; ctx.fillRect(350, 35, 300, 8);
+            ctx.fillStyle = '#ef4444'; ctx.font = 'bold 14px Prompt';
+            ctx.fillText("🚪 เดินลงช่องประตูด้านล่าง เพื่อกลับออกไปโถงทางเดิน", 350, mapH - 15);
+        }
+
+        // ตัวละคร
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        ctx.rotate(player.angle);
+        let swing = player.isMoving ? Math.sin(player.animFrame) * 10 : 0;
+        ctx.fillStyle = player.color;
+        ctx.fillRect(-4, -player.radius - 3 + (swing*0.4), 10, 5);
+        ctx.fillRect(-4, player.radius - 2 - (swing*0.4), 10, 5);
+        ctx.beginPath(); ctx.arc(0, 0, player.radius, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = player.hairColor;
+        ctx.beginPath(); ctx.arc(2, 0, player.radius - 4, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(7, -4, 3, 0, Math.PI*2); ctx.beginPath(); ctx.arc(7, 4, 3, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(8, -4, 1.5, 0, Math.PI*2); ctx.beginPath(); ctx.arc(8, 4, 1.5, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+    }
+
+    function loop() { update(); draw(); requestAnimationFrame(loop); }
+    loop();
+</script>
+</body>
+</html>
